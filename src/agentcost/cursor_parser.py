@@ -76,10 +76,10 @@ class CursorParser:
         if not usage_data:
             return None
         
-        # Extract model name
+        # Extract model name. `split(":")[-1]` used to keep the tier and throw
+        # the model away ("meituan/longcat-2.5-preview:free" -> "free"), losing
+        # the real name and billing a free tier (#206).
         model = message.get("model", entry.get("model", "unknown"))
-        if ":" in model:
-            model = model.split(":")[-1].strip()
         model = self._normalize_model(model)
         
         # Parse timestamp
@@ -105,30 +105,25 @@ class CursorParser:
         )
 
     def _normalize_model(self, model: str) -> str:
-        """Normalize model name to pricing key."""
-        model = model.lower().replace("-", " ").replace(".", " ")
-        if "sonnet" in model:
-            if "3 5" in model or "3.5" in model:
+        """Map a logged model name onto its pricing key.
+
+        Only genuine version aliases are rewritten (``claude-sonnet-4-5`` ->
+        ``claude-sonnet-4``, a spelling MODEL_PRICING does not carry). Anything
+        else is returned unchanged: the table already holds exact keys for
+        ``claude-3-7-sonnet``, ``gemini-1.5-flash``, ``gpt-4o`` and friends, so
+        guessing a family here only shadowed the correct row. An earlier version
+        both guessed (``gemini-1.5-flash`` -> ``gemini-2.0-flash``) and returned
+        its own lowercased, separator-mangled form for everything it did not
+        recognise, which made every non-Claude model unmatchable and silently
+        billed at the fallback rate (#206).
+        """
+        lowered = model.lower().replace("-", " ").replace(".", " ")
+        if "sonnet" in lowered:
+            if "3 5" in lowered or "3.5" in lowered:
                 return "claude-3-5-sonnet"
-            elif "4" in model:
+            elif "4" in lowered:
                 return "claude-sonnet-4"
-            return "claude-3-5-sonnet"
-        elif "opus" in model:
-            if "4" in model:
+        elif "opus" in lowered:
+            if "4" in lowered:
                 return "claude-opus-4"
-            return "claude-3-opus"
-        elif "haiku" in model:
-            return "claude-3-haiku"
-        elif "gpt 4o mini" in model or "gpt-4o-mini" in model:
-            return "gpt-4o-mini"
-        elif "gpt 4o" in model or "gpt-4o" in model:
-            return "gpt-4o"
-        elif "gpt 4" in model:
-            return "gpt-4"
-        elif "gemini" in model:
-            if "2.5" in model or "2 5" in model:
-                return "gemini-2.5-pro"
-            return "gemini-2.0-flash"
-        elif "deepseek" in model:
-            return "deepseek-v3"
         return model

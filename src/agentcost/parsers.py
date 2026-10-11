@@ -63,10 +63,11 @@ class ClaudeCodeParser:
         if not usage_data:
             return None
         
-        # Extract model
+        # Extract model. `split(":")[-1]` used to keep the tier and throw the
+        # model away ("meituan/longcat-2.5-preview:free" -> "free"), which both
+        # lost the real name and billed a free tier (#206). _normalize_model_name
+        # strips the tier and any provider prefix in one place.
         model = message.get("model", "unknown")
-        if ":" in model:
-            model = model.split(":")[-1]
         
         model = self._normalize_model(model)
         
@@ -92,20 +93,24 @@ class ClaudeCodeParser:
         )
 
     def _normalize_model(self, model: str) -> str:
-        """Normalize model name to pricing key."""
-        model = model.lower().replace("-", " ").replace(".", " ")
-        if "sonnet" in model and ("3 5" in model or "3.5" in model):
+        """Map a logged model name onto its pricing key.
+
+        Only genuine version aliases are rewritten (``claude-sonnet-4-5`` ->
+        ``claude-sonnet-4``). Everything else is returned unchanged, because
+        MODEL_PRICING already holds exact keys for ``claude-3-7-sonnet``,
+        ``gpt-4o``, ``gemini-2.5-pro`` and friends; guessing a family here only
+        shadowed the correct row. An earlier version returned its own lowercased,
+        separator-mangled form for anything it did not recognise ("gpt-4o" ->
+        "gpt 4o"), so no non-Claude model could ever match the table and every
+        one of them was silently billed at the fallback rate (#206).
+        """
+        lowered = model.lower().replace("-", " ").replace(".", " ")
+        if "sonnet" in lowered and ("3 5" in lowered or "3.5" in lowered):
             return "claude-3-5-sonnet"
-        elif "opus" in model and "4" in model:
-            return "claude-opus-4"
-        elif "sonnet" in model and "4" in model:
+        elif "sonnet" in lowered and "4" in lowered:
             return "claude-sonnet-4"
-        elif "opus" in model:
-            return "claude-3-opus"
-        elif "haiku" in model:
-            return "claude-3-haiku"
-        elif "claude 2" in model or "claude2" in model:
-            return "claude-2.1"
+        elif "opus" in lowered and "4" in lowered:
+            return "claude-opus-4"
         return model
 
 

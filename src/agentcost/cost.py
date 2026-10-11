@@ -1,8 +1,12 @@
 """Token cost tracker for AI agent sessions."""
 
+import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def _ensure_utc(value: datetime) -> datetime:
@@ -82,19 +86,78 @@ MODEL_PRICING = {
 }
 
 
+_FALLBACK_PRICING = {"input": 1.0, "output": 3.0, "cache_read": 0.1, "cache_write": 1.25}
+
+# Unknown-model warnings are emitted once per model per process: a session that
+# uses one unlisted model for 2000 calls should say so once, not 2000 times.
+_warned_models: set = set()
+
+
+def _normalize_model_name(model: str) -> str:
+    """Return the pricing key a logged model name maps onto.
+
+    Handles the three shapes that miss an exact lookup in practice:
+
+    * a provider prefix -- ``anthropic/claude-sonnet-4`` -> ``claude-sonnet-4``
+    * a vendor tier suffix -- ``openrouter/deepseek-v3:free`` -> ``deepseek-v3``
+    * a date stamp -- ``claude-sonnet-4-20250514`` -> ``claude-sonnet-4``
+
+    Returns the input unchanged when nothing applies, so an unrecognised name is
+    still reported as itself rather than silently rewritten (#206).
+    """
+    name = model.strip()
+    if "/" in name:
+        name = name.rsplit("/", 1)[1]
+    if ":" in name:
+        name = name.split(":", 1)[0]
+    name = re.sub(r"-\d{8}$", "", name.strip())
+    return name.strip()
+
+
+_ZERO_PRICING = {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0}
+
+
+def _is_free_tier(model: str) -> bool:
+    """Return whether a logged name carries the explicit ``:free`` tier.
+
+    A ``:free`` model that is missing from MODEL_PRICING used to fall through to
+    the paid fallback, so a free session was billed at $1/$3 (#206). The suffix
+    is the provider's own statement about the price; one rule covers every free
+    model instead of an enumeration that goes stale with each release.
+    """
+    return model.strip().lower().endswith(":free")
+
+
 def is_free_model(model: str) -> bool:
     """Return whether a model has explicit zero-cost pricing."""
-    pricing = MODEL_PRICING.get(model)
-    return pricing is not None and not any(pricing.values())
+    if _is_free_tier(model):
+        return True
+    for key in (model, _normalize_model_name(model)):
+        pricing = MODEL_PRICING.get(key)
+        if pricing is not None:
+            return not any(pricing.values())
+    return False
 
 
 def calculate_cost(usage: TokenUsage) -> float:
     """Calculate cost in USD for a token usage entry."""
     pricing = MODEL_PRICING.get(usage.model)
-    if not pricing:
-        # Default pricing for unknown models
-        pricing = {"input": 1.0, "output": 3.0, "cache_read": 0.1, "cache_write": 1.25}
-    
+    if pricing is None:
+        pricing = MODEL_PRICING.get(_normalize_model_name(usage.model))
+    if pricing is None and _is_free_tier(usage.model):
+        pricing = _ZERO_PRICING
+    if pricing is None:
+        # Default pricing for unknown models. This is a guess, so say so: a
+        # silent fallback made every unlisted model look correctly priced
+        # (#206).
+        if usage.model not in _warned_models:
+            _warned_models.add(usage.model)
+            logger.warning(
+                "Unknown model %r; using fallback pricing (input $%s / output $%s per 1M tokens)",
+                usage.model, _FALLBACK_PRICING["input"], _FALLBACK_PRICING["output"],
+            )
+        pricing = _FALLBACK_PRICING
+
     cost = (
         (usage.input_tokens / 1_000_000) * pricing["input"] +
         (usage.output_tokens / 1_000_000) * pricing["output"] +

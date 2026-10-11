@@ -177,7 +177,18 @@ When Hermes adds a new tool, add its name and estimated token overhead to that d
 
 ## Model pricing
 
-Built-in pricing for Claude, GPT, Gemini, DeepSeek, Grok, Qwen, Kimi, and Llama models. Free-tier LongCat, Omni, and Muse models are explicitly priced at $0; unknown models use fallback pricing.
+Built-in pricing for Claude, GPT, Gemini, DeepSeek, Grok, Qwen, Kimi, and Llama models. Free-tier LongCat, Omni, and Muse models are explicitly priced at $0.
+
+Before looking a model up, the logged name is normalised: a provider prefix and a
+vendor tier suffix are stripped (`anthropic/claude-sonnet-4` and
+`openrouter/deepseek-v3:free` both resolve), and an 8-digit date stamp is removed
+(`claude-sonnet-4-20250514` prices as `claude-sonnet-4`). A name carrying the
+`:free` tier is priced at $0 even when it is not in the table.
+
+Any model still unmatched uses fallback pricing of $1 per 1M input tokens and $3
+per 1M output tokens, and **logs a warning naming the model** so an unlisted model
+is visible instead of silently mispriced. The warning is emitted once per model per
+process. If you see one, add the model to `MODEL_PRICING` in `src/agentcost/cost.py`.
 
 ## Security
 
