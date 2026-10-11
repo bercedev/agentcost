@@ -18,6 +18,7 @@ from agentcost.discovery import LogDiscovery
 from agentcost.report import ReportGenerator
 from agentcost.budget import load_budget_config, save_budget_config, validate_threshold
 from agentcost.sarif import budget_to_sarif, sarif_to_string
+from agentcost.forecasting import daily_costs_by_date, fill_daily, forecast
 
 console = Console()
 
@@ -473,6 +474,85 @@ def week(days, date, log_paths, agent, json_out, quiet=False):
             f"Daily avg: {_format_currency(daily_avg)}  |  Monthly projection: {_format_currency(monthly_proj)}",
             title="Projection"
         ))
+
+@cli.command("forecast")
+@click.option("--days", "-d", default=30, show_default=True,
+              type=click.IntRange(1, 365), help="Days to forecast ahead")
+@click.option("--history", default=30, show_default=True,
+              type=click.IntRange(3, 365), help="Days of past usage to fit the forecast on")
+@click.option("--budget", default=None, type=float,
+              help="Budget in USD for the whole forecast period (exit 1 if projected spend exceeds it)")
+@click.option("--path", "-p", "log_paths", multiple=True, type=click.Path(path_type=Path),
+              help="Custom log paths")
+@click.option("--agent", "-a", default=None, type=click.Choice(["claude", "codex", "opencode", "hermes", "cursor"]),
+              help="Force a specific agent parser, overriding auto-detection")
+@click.option("--json", "--json-output", "json_out", is_flag=True, help="Output as JSON")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress rich formatting and output JSON only")
+def forecast_cmd(days, history, budget, log_paths, agent, json_out, quiet=False):
+    """Forecast future spending from recent daily usage trends."""
+    from datetime import datetime, timedelta
+
+    if budget is not None:
+        validate_threshold(budget, "--budget")
+
+    usages = _parse_all_logs(list(log_paths) if log_paths else None, agent=agent)
+    by_day = daily_costs_by_date(usages)
+    if not by_day:
+        click.echo("Error: no agent activity found to forecast from.", err=True)
+        sys.exit(2)
+
+    # Today is still in progress, so its total is partial; fit on complete days only.
+    end = datetime.now().date() - timedelta(days=1)
+    start = max(end - timedelta(days=history - 1), min(by_day))
+    try:
+        result = forecast(fill_daily(by_day, start, end), start, days)
+    except ValueError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(2)
+
+    total, low, high = result.total()
+    over = budget is not None and total > budget
+    milestones = sorted({d for d in (7, 30, 60, 90) if d < days} | {days})
+
+    if json_out or quiet:
+        click.echo(json.dumps({
+            "history_days": result.history_days,
+            "forecast_days": days,
+            "seasonal": result.seasonal,
+            "daily_trend_usd": round(result.daily_slope, 6),
+            "projected_total_usd": round(total, 4),
+            "low_usd": round(low, 4),
+            "high_usd": round(high, 4),
+            "budget_usd": budget,
+            "over_budget": over,
+            "milestones": [
+                {"days": d, "projected_usd": round(m, 4),
+                 "low_usd": round(lo, 4), "high_usd": round(hi, 4)}
+                for d in milestones
+                for m, lo, hi in [result.total(d)]
+            ],
+        }, indent=2))
+    else:
+        table = Table(title=f"Cost forecast (fitted on the last {result.history_days} days)")
+        table.add_column("Next")
+        table.add_column("Projected", justify="right")
+        table.add_column("Likely range (95%)", justify="right")
+        for d in milestones:
+            m, lo, hi = result.total(d)
+            table.add_row(f"{d} days", _format_currency(m),
+                          f"{_format_currency(lo)} - {_format_currency(hi)}")
+        console.print(table)
+        if budget is not None:
+            console.print(f"Budget for {days} days: {_format_currency(budget)}")
+
+    if over:
+        if not quiet:
+            click.echo(
+                f"WARNING: projected spend {_format_currency(total)} over the next "
+                f"{days} days exceeds budget {_format_currency(budget)}",
+                err=True,
+            )
+        sys.exit(1)
 
 
 @cli.command()

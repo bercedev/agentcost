@@ -8,6 +8,7 @@ from agentcost.hermes_output import HermesOutputParser
 from agentcost.discovery import LogDiscovery
 from agentcost.report import ReportGenerator
 from agentcost.persistence import CostPersistence
+from agentcost.forecasting import Forecast, ForecastPoint, forecast
 
 try:
     __version__ = _metadata_version("agentcost-py")
@@ -27,4 +28,7 @@ __all__ = [
     "LogDiscovery",
     "ReportGenerator",
     "CostPersistence",
+    "Forecast",
+    "ForecastPoint",
+    "forecast",
 ]

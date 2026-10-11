@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Python 3.10 compatibility: `tomllib` fallback via `tomli` for `src/agentcost/budget.py` (#26)
 - `--strict` flag on `agentcost analyze`: log parse failures exit non-zero instead of being reported as zero usage (#83)
+- `agentcost forecast` command: projects future spend from recent daily usage (linear trend plus a day-of-week pattern, with an approximate 95% range) and exits 1 when projected spend exceeds `--budget` (#173)
+- `agentcost forecast` command: projects future spend from recent daily usage (linear trend plus a day-of-week pattern, with an approximate 95% range) and exits 1 when projected spend exceeds `--budget` (#173)
+
 
 ### Fixed
 - `alert` now treats spending equal to the threshold as within budget, matching `budget check` and SARIF findings (#189)

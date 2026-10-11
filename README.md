@@ -56,6 +56,8 @@ agentcost today                              # today's usage summary
 agentcost today --date 2026-09-14            # a specific day
 agentcost week                               # last 7 days
 agentcost week --days 30                     # last 30 days
+agentcost forecast                           # project the next 30 days
+agentcost forecast --days 90 --budget 1000   # exit 1 if projected 90-day spend exceeds $1000
 agentcost cron                               # analyze Hermes cron costs
 agentcost cron --job <job-id>                # a specific Hermes job
 agentcost cron --json-output                 # machine-readable cron summary
