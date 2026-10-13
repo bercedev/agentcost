@@ -111,6 +111,22 @@ Check if spending exceeds threshold today:
 agentcost alert --threshold 5.0
 ```
 
+### Export to SQLite
+
+```bash
+agentcost export                             # persist discovered usage to ~/.agentcost/costs.db
+agentcost export -p ./logs --dry-run        # preview without writing
+agentcost export --json-output              # emit the parsed records as JSON instead
+agentcost export --since 2026-09-01 --until 2026-09-30   # limit the date range
+agentcost export --db ./costs.db           # write to a custom database path
+```
+
+`export` parses the discovered logs, computes the estimated cost for each entry, and
+writes it to the SQLite persistence store so you can track spend across days and
+weeks. Entries already present (matched on `session_id` + `model` + `timestamp`) are
+skipped, so re-running the same export is idempotent. `--json-output` (or `--quiet`)
+prints the parsed records and leaves the database untouched.
+
 ### Example output
 
 ```
