@@ -987,5 +987,93 @@ def _output_markdown_report(report):
         click.echo(f"| {model} | {data['calls']} | {data['tokens']:,} | {_format_currency(data['cost_usd'])} |")
 
 
+def _usage_to_json(usage: TokenUsage) -> dict:
+    """Serialize a single TokenUsage for the export --json-output mode."""
+    return {
+        "model": usage.model,
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "cache_read_tokens": usage.cache_read_tokens,
+        "cache_write_tokens": usage.cache_write_tokens,
+        "total_tokens": usage.total_tokens,
+        "timestamp": usage.timestamp.isoformat() if usage.timestamp else None,
+        "agent_id": usage.agent_id,
+        "session_id": usage.session_id,
+        "estimated_cost_usd": round(calculate_cost(usage), 4),
+    }
+
+
+def _export_bound(value: str, kind: str):
+    """Parse a --since/--until date (YYYY-MM-DD) into a UTC day boundary."""
+    from datetime import datetime
+
+    day = _ensure_utc(datetime.strptime(value, "%Y-%m-%d"))
+    if kind == "since":
+        return day.replace(hour=0, minute=0, second=0, microsecond=0)
+    return day.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+
+@cli.command()
+@click.option("--path", "-p", "log_paths", multiple=True, type=click.Path(path_type=Path),
+              help="Custom log paths")
+@click.option("--agent", "-a", default=None, type=click.Choice(["claude", "codex", "opencode", "hermes", "cursor"]),
+              help="Force a specific agent parser, overriding auto-detection")
+@click.option("--since", default=None, help="Only export usage on/after this date (YYYY-MM-DD)")
+@click.option("--until", default=None, help="Only export usage on/before this date (YYYY-MM-DD)")
+@click.option("--dry-run", is_flag=True, help="Preview what would be written without persisting")
+@click.option("--json-output", "json_out", is_flag=True,
+              help="Output the parsed records as JSON instead of writing to the DB")
+@click.option("--db", "db_path", default=None, type=click.Path(path_type=Path),
+              help="SQLite database to write to (default: ~/.agentcost/costs.db)")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress rich formatting and output JSON only")
+def export(log_paths, agent, since, until, dry_run, json_out, db_path, quiet=False):
+    """Export token usage data to the SQLite persistence store.
+
+    Parses the discovered logs, computes the estimated cost for each entry, and
+    writes it to SQLite. Entries already present (matched on session_id + model +
+    timestamp) are skipped, so re-running the same export is idempotent. Use
+    --dry-run to preview without writing, or --json-output to emit the parsed
+    records as JSON instead of touching the database.
+    """
+    usages = _parse_all_logs(list(log_paths) if log_paths else None, agent=agent)
+
+    if since:
+        lo = _export_bound(since, "since")
+        usages = [u for u in usages if u.timestamp and u.timestamp >= lo]
+    if until:
+        hi = _export_bound(until, "until")
+        usages = [u for u in usages if u.timestamp and u.timestamp <= hi]
+
+    if json_out or quiet:
+        click.echo(json.dumps([_usage_to_json(u) for u in usages], indent=2))
+        return
+
+    if not usages:
+        console.print("[yellow]No usage data found to export.[/yellow]")
+        return
+
+    records = [(u, calculate_cost(u), 0.0) for u in usages]
+
+    if dry_run:
+        console.print(f"[yellow]Would persist {len(records)} usage record(s); nothing was written.[/yellow]")
+        return
+
+    from agentcost.persistence import CostPersistence
+
+    persistence = CostPersistence(db_path)
+    existing = persistence.existing_keys()
+
+    new_records = [r for r in records if CostPersistence._key_for(r[0]) not in existing]
+    skipped = len(records) - len(new_records)
+
+    if new_records:
+        persistence.record_many(new_records)
+
+    if skipped:
+        console.print(f"[green]Persisted {len(new_records)} usage record(s); skipped {skipped} already in the DB.[/green]")
+    else:
+        console.print(f"[green]Persisted {len(new_records)} usage record(s).[/green]")
+
+
 if __name__ == "__main__":
     cli()

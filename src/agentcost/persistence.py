@@ -102,6 +102,27 @@ class CostPersistence:
         conn.commit()
         conn.close()
 
+    def existing_keys(self) -> set:
+        """Return the ``(session_id, model, timestamp)`` keys already stored.
+
+        Used by the ``export`` command to skip entries that are already
+        persisted so a re-run is idempotent. The timestamp is compared in the
+        same ISO-8601 form :meth:`record` stores it, so two usages only
+        collide when all three fields match exactly.
+        """
+        conn = sqlite3.connect(str(self.db_path))
+        rows = conn.execute(
+            "SELECT session_id, model, timestamp FROM token_usage"
+        ).fetchall()
+        conn.close()
+        return {(session_id, model, timestamp) for session_id, model, timestamp in rows}
+
+    @staticmethod
+    def _key_for(usage: TokenUsage) -> tuple:
+        """Build the dedup key for a usage, matching :meth:`record` storage."""
+        ts = usage.timestamp.isoformat() if usage.timestamp else ""
+        return (usage.session_id or "", usage.model, ts)
+
     def get_cost_summary(self, session_id: Optional[str] = None,
                         model: Optional[str] = None,
                         start_date: Optional[datetime] = None,
