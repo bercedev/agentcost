@@ -58,3 +58,26 @@ def test_discover_reports_unsupported_hermes_cron(tmp_path, monkeypatch):
 
     assert result.exit_code == 0
     assert "Hermes cron output: skipped (unsupported format)" in result.output
+
+
+def test_discover_cursor_dir_under_hermes_path(tmp_path):
+    """A cursor dir nested under a .hermes path must classify as cursor.
+
+    Regression: LogDiscovery checked '.hermes' in path_parts before
+    'cursor' in base_name, so pytest's TMPDIR (/root/.hermes/cache/scratch)
+    made the fixture classify as hermes and --agent cursor hid it.
+    """
+    base = tmp_path / ".hermes" / "cache"
+    base.mkdir(parents=True)
+    cursor_dir = base / "cursor-sessions"
+    cursor_dir.mkdir()
+    (cursor_dir / "session1.jsonl").write_text(json.dumps({
+        "type": "assistant",
+        "timestamp": "2026-10-03T12:00:00Z",
+        "message": {"model": "gpt-4o", "usage": {"input_tokens": 100, "output_tokens": 50}},
+    }) + "\n")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["discover", "--agent", "cursor", "-p", str(cursor_dir)])
+    assert result.exit_code == 0
+    assert "Found log files" in result.output
+    assert "cursor" in result.output.lower()

@@ -312,7 +312,9 @@ def discover(log_paths, agent, quiet=False):
     if cron_paths:
         console.print("[yellow]Hermes cron output: skipped (unsupported format)[/yellow]")
 
-    if db_usages:
+    # ponytail: the SQLite dump is Hermes data; hide it when another agent is filtered
+    show_db = bool(db_usages) and (agent is None or agent == "hermes")
+    if show_db:
         console.print(f"\n[bold green]Hermes SQLite database:[/bold green] {len(db_usages)} usage records")
         date_range = sqlite_parser.get_date_range()
         if date_range[0] and date_range[1]:
@@ -324,7 +326,7 @@ def discover(log_paths, agent, quiet=False):
             if paths:
                 console.print(f"  [cyan]{agent_type}[/cyan]: {len(paths)} files")
     
-    if not db_usages and not any(logs.values()):
+    if not show_db and not any(logs.values()):
         console.print("[yellow]No agent logs found.[/yellow]")
         return
     
