@@ -105,9 +105,9 @@ class TestNormalizedNameLookup:
 
     def test_free_model_stays_free_through_a_prefixed_alias(self):
         """Billing a free tier is the worst face of this bug."""
-        assert is_free_model("meituan/longcat-2.0:free")
+        assert is_free_model("meituan/longcat-2.5-preview:free")
         assert calculate_cost(
-            TokenUsage(model="meituan/longcat-2.0:free", input_tokens=1_000_000, output_tokens=1_000_000)
+            TokenUsage(model="meituan/longcat-2.5-preview:free", input_tokens=1_000_000, output_tokens=1_000_000)
         ) == 0.0
 
     def test_free_tier_not_in_the_table_is_still_free(self):

@@ -85,9 +85,6 @@ class TestCostCalculation:
 
     def test_free_models_have_zero_pricing(self):
         for model in (
-            "meituan/longcat-2.0:free",
-            "longcat-2.0",
-            "longcat-2.0:free",
             "omni-1",
             "muse-spark-1.2-contributor",
         ):

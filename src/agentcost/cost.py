@@ -78,9 +78,6 @@ MODEL_PRICING = {
     "llama-3.1-70b": {"input": 0.9, "output": 0.9, "cache_read": 0.09, "cache_write": 0.09},
     "llama-3.1-8b": {"input": 0.18, "output": 0.18, "cache_read": 0.02, "cache_write": 0.02},
     "claude-3-7-sonnet": {"input": 3.0, "output": 15.0, "cache_read": 0.3, "cache_write": 3.75},
-    "meituan/longcat-2.0:free": {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
-    "longcat-2.0": {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
-    "longcat-2.0:free": {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
     "omni-1": {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
     "muse-spark-1.2-contributor": {"input": 0.0, "output": 0.0, "cache_read": 0.0, "cache_write": 0.0},
 }
