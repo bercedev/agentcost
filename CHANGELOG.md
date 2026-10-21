@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Fixed
+- `alert --json-output` emits the existing usage breakdown while preserving threshold exit codes, fixing the composite action alert invocation (#215).
 - `init --quiet` / `-q` now suppresses the banner and the "Config saved" summary, as `--help` says; the prompts and the invalid-number error remain (#216)
 - `alert` now treats spending equal to the threshold as within budget, matching `budget check` and SARIF findings (#189)
 - A log that cannot be read faithfully now always says so. The shared reader distinguishes a latin-1 log (entries recovered, warning emitted) from a file that is not text at all, and a binary log no longer decodes as "UTF-16" on a two-byte guess and get reported as a faithful read while contributing zero usages. `--strict` now fails on a log that is not text, instead of reporting it as an empty session (#185)

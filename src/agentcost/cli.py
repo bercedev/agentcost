@@ -565,7 +565,8 @@ def forecast_cmd(days, history, budget, log_paths, agent, json_out, quiet=False)
 @click.option("--threshold", "-t", default=5.0, type=float, help="Alert threshold in USD")
 @click.option("--sarif", "as_sarif", is_flag=True, help="Output SARIF 2.1.0 (for GitHub Code Scanning)")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress console messages (exit code only)")
-def alert(log_paths, agent, threshold, as_sarif, quiet=False):
+@click.option("--json-output", "json_out", is_flag=True, help="Output as JSON")
+def alert(log_paths, agent, threshold, as_sarif, quiet=False, json_out=False):
     """Check if spending exceeds threshold today."""
     validate_threshold(threshold, "--threshold")
     from datetime import datetime, timezone
@@ -584,6 +585,10 @@ def alert(log_paths, agent, threshold, as_sarif, quiet=False):
             tool_version=__version__,
         )
         click.echo(sarif_to_string(sarif_doc))
+        sys.exit(1 if total_cost > threshold else 0)
+
+    if json_out:
+        _output_json_breakdown(summarize_usage(usages))
         sys.exit(1 if total_cost > threshold else 0)
     
     if total_cost > threshold:
