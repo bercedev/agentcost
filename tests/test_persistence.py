@@ -118,3 +118,55 @@ def test_filter_by_session(persistence):
     s1 = persistence.get_cost_summary(session_id="s1")
     assert s1["total_records"] == 1
     assert s1["total_input_tokens"] == 100
+
+
+@pytest.fixture
+def opened_connections(monkeypatch):
+    """Every connection the persistence layer opens from here on."""
+    opened = []
+    real_connect = sqlite3.connect
+
+    def tracking_connect(*args, **kwargs):
+        conn = real_connect(*args, **kwargs)
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr(sqlite3, "connect", tracking_connect)
+    return opened
+
+
+def _is_closed(conn):
+    try:
+        conn.execute("SELECT 1")
+    except sqlite3.ProgrammingError:
+        return True
+    return False
+
+
+def test_a_failed_write_still_closes_its_connection(persistence, opened_connections):
+    # model is NOT NULL, so this insert raises after the connection is open (#213).
+    bad = TokenUsage(model=None, input_tokens=1, output_tokens=1, session_id="s")
+    with pytest.raises(sqlite3.IntegrityError):
+        persistence.record(bad)
+    assert len(opened_connections) == 1
+    assert _is_closed(opened_connections[0])
+
+
+def test_a_failed_batch_closes_its_connection_and_stores_nothing(persistence, opened_connections):
+    good = TokenUsage(model="m", input_tokens=1, output_tokens=1, session_id="s")
+    bad = TokenUsage(model=None, input_tokens=1, output_tokens=1, session_id="s")
+    with pytest.raises(sqlite3.IntegrityError):
+        persistence.record_many([(good, 0.1, 0.0), (bad, 0.1, 0.0)])
+    assert _is_closed(opened_connections[0])
+    assert persistence.get_cost_summary()["total_records"] == 0
+
+
+def test_every_read_closes_its_connection(persistence, opened_connections):
+    persistence.record(TokenUsage(model="m", input_tokens=1, output_tokens=1, session_id="s"))
+    persistence.existing_keys()
+    persistence.get_cost_summary()
+    persistence.get_model_breakdown()
+    persistence.get_session_breakdown()
+    persistence.get_daily_summary()
+    assert len(opened_connections) == 6
+    assert all(_is_closed(conn) for conn in opened_connections)
