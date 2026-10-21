@@ -136,3 +136,35 @@ def test_budget_set_quiet(tmp_path, monkeypatch, quiet_flag, thresholds):
     assert quiet.output == ""
     assert (tmp_path / "config.toml").read_bytes() == expected_config
     assert load_budget_config() == thresholds
+
+
+@pytest.mark.parametrize("quiet_flag", ["--quiet", "-q"])
+def test_init_quiet(tmp_path, monkeypatch, quiet_flag):
+    monkeypatch.setattr("agentcost.budget.CONFIG_DIR", tmp_path)
+    monkeypatch.setattr("agentcost.budget.CONFIG_FILE", tmp_path / "config.toml")
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+
+    normal = runner.invoke(cli, ["init", "--project"], input="1\n2\n3\n")
+    assert normal.exit_code == 0
+    assert "agentcost — Initialization" in normal.output
+    assert "Config saved to" in normal.output
+    expected_config = (tmp_path / ".agentcost.toml").read_bytes()
+    (tmp_path / ".agentcost.toml").unlink()
+
+    quiet = runner.invoke(cli, ["init", "--project", quiet_flag], input="1\n2\n3\n")
+    assert quiet.exit_code == 0
+    # only the prompts remain: no banner and no summary
+    assert "agentcost — Initialization" not in quiet.output
+    assert "Config saved to" not in quiet.output
+    assert "Daily: $1.00" not in quiet.output
+    assert "Daily budget (USD)" in quiet.output
+    assert (tmp_path / ".agentcost.toml").read_bytes() == expected_config
+
+
+def test_init_quiet_still_reports_an_invalid_number(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(cli, ["init", "--project", "--quiet"], input="abc\n2\n3\n")
+    assert result.exit_code == 1
+    assert "Invalid number format" in result.output
+    assert not (tmp_path / ".agentcost.toml").exists()

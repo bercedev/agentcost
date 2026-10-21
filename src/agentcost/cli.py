@@ -680,7 +680,8 @@ def cron(job, limit, json_out, quiet=False):
 @click.option("--quiet", "-q", is_flag=True, help="Suppress verbose output")
 def init(project, quiet=False):
     """Initialize agentcost config with guided budget setup."""
-    console.print("[bold]agentcost — Initialization[/bold]\n")
+    if not quiet:
+        console.print("[bold]agentcost — Initialization[/bold]\n")
 
     from rich.prompt import Prompt
 
@@ -697,10 +698,11 @@ def init(project, quiet=False):
         sys.exit(1)
 
     target = save_budget_config(daily, weekly, monthly, project=project)
-    console.print(f"[green]Config saved to {target}[/green]")
-    console.print(f"  Daily: ${daily:.2f}")
-    console.print(f"  Weekly: ${weekly:.2f}")
-    console.print(f"  Monthly: ${monthly:.2f}")
+    if not quiet:
+        console.print(f"[green]Config saved to {target}[/green]")
+        console.print(f"  Daily: ${daily:.2f}")
+        console.print(f"  Weekly: ${weekly:.2f}")
+        console.print(f"  Monthly: ${monthly:.2f}")
 
 
 @cli.command()
