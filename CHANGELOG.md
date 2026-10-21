@@ -11,9 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Python 3.10 compatibility: `tomllib` fallback via `tomli` for `src/agentcost/budget.py` (#26)
 - `--strict` flag on `agentcost analyze`: log parse failures exit non-zero instead of being reported as zero usage (#83)
 - `agentcost forecast` command: projects future spend from recent daily usage (linear trend plus a day-of-week pattern, with an approximate 95% range) and exits 1 when projected spend exceeds `--budget` (#173)
-- `agentcost forecast` command: projects future spend from recent daily usage (linear trend plus a day-of-week pattern, with an approximate 95% range) and exits 1 when projected spend exceeds `--budget` (#173)
 - `agentcost export` command: persists discovered usage to the SQLite store via `CostPersistence`, with `--dry-run`, `--since`/`--until`, `--json-output`, a custom `--db` path, and duplicate detection so re-runs are idempotent (#92)
-
 
 ### Fixed
 - `init --quiet` / `-q` now suppresses the banner and the "Config saved" summary, as `--help` says; the prompts and the invalid-number error remain (#216)
